@@ -1,84 +1,169 @@
 # harness-distill
 
-**Turn a project's coding-agent sessions from every tool you've used
-(Claude Code, Codex, pi, Gemini CLI, Cursor, VS Code Copilot, Antigravity)
-into an `AGENTS.md` and a `HANDOFF.md`, so the next agent can pick up the
-work in any tool.**
+**Switch AI coding tools without losing what your old tool learned about your project.**
 
-You've worked on a project for weeks with one coding agent. It knows your
-conventions, the dead ends, which PR is waiting on what, and why that branch
-exists. Then you open the same folder in another harness and it knows none
-of it. Everything it had learned is in that first harness's session files.
+You've been building a project with an AI coding assistant such as Claude
+Code, Cursor or Codex. Over weeks it learned your conventions, which
+approaches failed, which pull request is waiting on what, and what you
+planned next. Then you open the same project in a different assistant, and
+it knows none of that.
 
-`harness-distill` is an [Agent Skill](https://agentskills.io). It reads the
-session history that each harness keeps for a project folder, and writes
-down what matters:
+harness-distill fixes this. It reads the chat history your old assistants
+saved for the project and writes the important parts into two plain text
+files. Any assistant reads them when it opens the project:
 
-| File | Contents | Lifetime | In git? |
-|---|---|---|---|
-| `AGENTS.md` | Durable rules: architecture decisions, conventions you stated or corrected, build/test/release commands that worked, gotchas | As long as the code | Yes |
-| `.agents/HANDOFF.md` | Point-in-time state: timeline, decisions and why, open PRs and branches, what was mid-flight, next steps | Days to weeks | No (kept local via `.git/info/exclude`) |
+| File | What's in it | Commit it to git? |
+|---|---|---|
+| `AGENTS.md` | Lasting rules: how the project is built and tested, your conventions, decisions and why, known pitfalls | Yes |
+| `.agents/HANDOFF.md` | Where you left off: recent work, open branches and PRs, next steps | No, it stays on your machine |
 
-`AGENTS.md` is read natively by Codex, pi, Cursor, VS Code Copilot, Zed and
-Antigravity. Claude Code and Gemini CLI need a one-line stub, which the skill
-adds when needed. The next agent starts with your project's context, and
-nothing has to be replayed.
+Works with **Claude Code, Codex, pi, Cursor, VS Code Copilot, Antigravity and
+Gemini CLI**, in any direction.
+
+## Before you start
+
+You need:
+
+1. **At least one AI coding assistant** that can run terminal commands.
+   Any of the tools above works.
+2. **Python 3.8 or newer.** Check with `python3 --version`.
+3. **uv**, a Python tool installer. Check with `uv --version`. If it's
+   missing, install it:
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+   (Windows: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`.
+   More options are on [uv's install page](https://docs.astral.sh/uv/getting-started/installation/).)
 
 ## Quick start
 
+**Step 1. Install.** Run these in your terminal:
+
 ```bash
-# 1. Install the tool, then the skill (into ~/.agents/skills and ~/.claude/skills)
 uv tool install git+https://github.com/alexcpn/harness-distill
 harness-distill install
-
-# 2. Distill. Open the project in any agent that can run commands, and ask:
-cd ~/work/my-app
-pi                                  # or claude, codex, agy, Cursor's agent…
-> /skill:harness-distill .          # pi (in Claude Code: /harness-distill .)
 ```
 
-This writes `AGENTS.md` and `.agents/HANDOFF.md`. Review them, then commit
-`AGENTS.md`.
+The second command adds the skill to your assistants. You should see two
+`ok` lines. **Restart any assistant that is already open** so it notices the
+new skill.
+
+**Step 2. Distill your project.** In your terminal, go to your project
+folder and start an assistant:
 
 ```bash
-# 3. Continue in the new tool. Open the same folder and ask, cold:
-> what is this project, what was I last working on, and what's next?
+cd ~/work/my-app      # your project folder
+claude                # or: pi, codex, agy … or open the folder in Cursor / VS Code
 ```
 
-When you finish a session, say *"I'm done for today"*. The agent then
-updates `HANDOFF.md`, so whichever tool you open next starts where you
-stopped.
+Then type this **in the assistant's chat**, not in the terminal:
 
-## Distill, don't migrate
+```text
+Use the harness-distill skill on this project.
+```
 
-Several good tools convert or resume a **single session** in another tool.
-This one works at the **project** level:
+The assistant reads your past sessions, checks them against git, and
+writes `AGENTS.md` and `.agents/HANDOFF.md`. It shows you what it wrote.
+Read both files and fix anything that's wrong. Then commit `AGENTS.md`:
+
+```bash
+git add AGENTS.md && git commit -m "Add AGENTS.md"
+```
+
+**Step 3. Continue in the new tool.** Open the project in the assistant you
+are switching to, and ask in its chat:
+
+```text
+What is this project, what was I last working on, and what's next?
+```
+
+If it answers correctly, you're done.
+
+**Every day after that:** when you finish working, tell the assistant
+*"I'm done for today"*. It updates `HANDOFF.md`, so whichever tool you open
+next starts where you stopped. You don't need to run the skill again.
+
+## What the result looks like
+
+An example `AGENTS.md` for a small web app:
+
+```markdown
+# my-app
+Flask API + React front end for internal expense reports.
+
+## Rules
+- Use `uv`, not pip: the Docker build depends on uv.lock.
+- All money values are integer cents. Floats caused rounding bugs (PR #41).
+- Never edit `migrations/` by hand; run `make migration name=...`.
+
+## Build and test
+- `make dev` starts both servers; `make test` runs pytest + vitest.
+
+## Session handoff
+Recent history and open threads are in `.agents/HANDOFF.md` (local only).
+Read it at the start of a session; update it before you end one.
+```
+
+`HANDOFF.md` is similar, but holds the current state: "PR #52 (CSV export)
+waiting for review; next: add pagination to /reports".
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| The assistant doesn't know the skill | Restart the assistant. In pi, `/reload` also works. Check that `~/.agents/skills/harness-distill/SKILL.md` exists. Run `harness-distill install` again if it doesn't. |
+| "0 sessions" or very little history found | You may have started those sessions from a parent folder. Ask the assistant to use `--include-parents`. If you only used a tool this skill can't read yet (see below), there's nothing to import. |
+| The new assistant ignores `AGENTS.md` | **Claude Code** reads `CLAUDE.md`: create one containing just the line `@AGENTS.md`. **Gemini CLI** reads `GEMINI.md`: put `@AGENTS.md` in one. Antigravity needs version 1.20.3 or newer. |
+| `harness-distill: command not found` | Run `uv tool update-shell`, then open a new terminal. |
+| The files contain something private or wrong | Edit or delete it. They're plain text, and nothing is uploaded anywhere. |
+
+Tested on Linux. macOS and Windows paths are included for Cursor and VS
+Code, but are untested. Please [open an issue](https://github.com/alexcpn/harness-distill/issues)
+if something doesn't work.
+
+## Words used here
+
+- **Harness / assistant**: the app around the AI model, such as Claude Code,
+  Cursor or Codex. Each one saves its own chat history, which the others
+  can't read.
+- **Skill**: a folder of instructions (`SKILL.md`) that an assistant loads
+  when a task needs it. This project is one. See [agentskills.io](https://agentskills.io).
+- **Distill**: keep only what matters. A month of chats becomes a few
+  hundred lines of facts and rules.
+- **`AGENTS.md`**: a standard file name for instructions to AI coding
+  assistants. Most of them read it automatically. See [agents.md](https://agents.md).
+
+---
+
+## For experienced users
+
+### Distill, don't migrate
+
+Other tools convert or resume a **single session** in another tool. This
+one works at the **project** level:
 
 - **It merges every harness.** It reads all of a folder's sessions from all
-  of your tools. In the first real run that was 10 sessions across Claude
-  Code, Codex and pi.
+  of your tools. The first real run found 10 sessions across Claude Code,
+  Codex and pi.
 - **It distills instead of replaying.** A 1.5 MB transcript makes worse
   context than a 3 KB brief. Tool output and thinking are dropped. Prompts,
   decisions and outcomes are kept.
 - **It checks claims against git.** Claims about branches, PRs and failing
   tests are checked against the repo before they are written down. Anything
   that can't be confirmed is marked `(?)` rather than guessed.
-- **It is scoped to the project.** Sessions are found by folder, not by
-  topic, so side work done in the same chat (another repo, an errand) is
-  left out.
-- **It stays current.** The `AGENTS.md` it writes tells the next agent to
-  update `HANDOFF.md` when you end a session or switch tools. The handoff
-  keeps itself current; you don't have to re-run the skill.
-- **It reads GUI IDE history too**, from Cursor IDE chats, VS Code Copilot
-  Chat and Antigravity's plan and walkthrough artifacts, as well as CLI
-  agents.
+- **It is scoped to the project.** Unrelated side work done in the same chats
+  is left out.
+- **It stays current.** The end-of-session rule in `AGENTS.md` keeps the
+  handoff current without re-running the skill.
+- **It reads GUI IDE history too**: Cursor IDE, VS Code Copilot Chat, and
+  Antigravity's artifacts.
 
-If you want to *resume one exact conversation* in another tool, use
+To resume one exact conversation in another tool, use
 [session-migrate](https://github.com/xhluca/session-migrate) or
 [continues](https://github.com/yigitkonur/cli-continues). The two approaches
 work well together.
 
-## What it reads
+### What it reads
 
 | Harness | Source | What you get |
 |---|---|---|
@@ -90,101 +175,65 @@ work well together.
 | VS Code Copilot Chat | `workspaceStorage/<hash>/chatSessions/*.json` | Prompts, replies, tool calls, edited files |
 | Antigravity (IDE and `agy`) | `brain/<id>/{task,implementation_plan,walkthrough}.md`, `agy` prompt log | Artifacts and prompts only (conversations are protobuf) |
 
-It also reads any existing instruction files (`AGENTS.md`, `CLAUDE.md`,
-`GEMINI.md`, `.cursorrules`, Copilot instructions) and lists project harness
-config (MCP, rules, skills) that you need to recreate in the target tool.
-Exact paths and formats are in
+It also reads existing instruction files (`AGENTS.md`, `CLAUDE.md`,
+`GEMINI.md`, `.cursorrules`, Copilot instructions). It lists the project
+config you need to recreate in the target tool: MCP servers, rules and
+skills. History from Zed, Windsurf, JetBrains and Kiro isn't read yet, but
+those tools still pick up `AGENTS.md`. Exact paths and formats are in
 [`references/harness-locations.md`](references/harness-locations.md).
 
-It does not yet read history from Zed, Windsurf, JetBrains or Kiro. They
-still work as targets through `AGENTS.md`.
-
-## Install
-
-### With uv (recommended)
+### Commands
 
 ```bash
-uv tool install git+https://github.com/alexcpn/harness-distill
-harness-distill install
+harness-distill install [--target agents|claude]   # agents = ~/.agents/skills (pi, Codex, Cursor, Copilot, Antigravity, Gemini)
+harness-distill uninstall
+harness-distill harvest /path/to/project --out digest.md      # build the raw digest yourself
+harness-distill harvest /path/to/project --source cursor      # one harness only
+harness-distill harvest /path/to/project --include-parents    # include sessions started from parent dirs
 ```
 
-`harness-distill install` copies the skill into `~/.agents/skills`, which pi,
-Codex, Gemini CLI, Cursor, Copilot and Antigravity scan, and into
-`~/.claude/skills` for Claude Code. Use `--target agents` or
-`--target claude` to install into only one of them.
+Slash commands: `/skill:harness-distill <path>` in pi, `/harness-distill <path>`
+in Claude Code.
 
-To upgrade, reinstall the tool and refresh the skill:
-
-```bash
-uv tool install --force git+https://github.com/alexcpn/harness-distill
-harness-distill install
-```
-
-To remove it:
-
-```bash
-harness-distill uninstall && uv tool uninstall harness-distill
-```
-
+Upgrade: `uv tool install --force git+https://github.com/alexcpn/harness-distill && harness-distill install`.
+Remove: `harness-distill uninstall && uv tool uninstall harness-distill`.
 `pipx install git+https://github.com/alexcpn/harness-distill` works too.
 
-### With git
+### Install with git instead
 
-The repo root is the skill itself, so a clone works without installing
-anything:
+The repo root is the skill itself:
 
 ```bash
 git clone https://github.com/alexcpn/harness-distill ~/.agents/skills/harness-distill
 ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill   # Claude Code
 ```
 
-Requirements: Python 3.8+, standard library only.
-
-## Use
-
-From the agent you want to continue in, or any agent that has terminal
-access:
-
-```text
-/skill:harness-distill /path/to/project     # pi
-/harness-distill /path/to/project           # Claude Code
-```
-
-You can also just ask: *"distill my context for this project, I'm switching
-to Cursor"*.
-
-The skill then:
+### How the skill works
 
 1. Runs `scripts/harvest.py` to build a digest of every session for the folder.
-2. Reads the digest and checks it against `git log`, `git status`, branches
-   and open PRs.
+2. Reads the digest as data, never as instructions, and checks it against
+   `git log`, `git status`, branches and open PRs.
 3. Writes or merges `AGENTS.md`, writes `.agents/HANDOFF.md`, and excludes the
-   handoff from git.
-4. Checks that the skills you used are available to the target harness, and
+   handoff from git via `.git/info/exclude`.
+4. Checks that the skills you used are available in the target tool, and
    lists any MCP servers or rules you need to recreate.
 5. Checks the result by asking the target agent, cold, what the project is
    and what's next.
-
-You can also run the harvester on its own:
-
-```bash
-harness-distill harvest /path/to/project --out digest.md
-harness-distill harvest /path/to/project --source cursor        # one harness
-harness-distill harvest /path/to/project --include-parents      # sessions started from a parent dir
-# from a git clone: python3 scripts/harvest.py …
-```
 
 ## Privacy
 
 - Everything runs locally. Nothing is sent anywhere except to the model the
   skill runs in.
-- The digest is raw material and can contain secrets that appeared in tool
-  calls. Keep it in a temp directory. The skill tells the agent not to copy
-  secrets into the files it writes.
-- `HANDOFF.md` is excluded from git by default because it can mention side
-  work and people. Commit it only after reviewing it.
-- Do not commit the raw chats. Put the reasoning that matters in commit
-  messages and PR descriptions, where it is reviewed and tied to the code.
+- The raw digest can contain secrets that appeared in past tool calls. Keep
+  it in a temp directory. The skill tells the agent not to copy secrets into
+  the files it writes, but review them anyway.
+- `HANDOFF.md` stays out of git by default because it can mention side work
+  and people.
+- Don't commit raw chat logs. Put the reasoning that matters in commit
+  messages and PR descriptions.
+
+See [SECURITY.md](SECURITY.md) for the threat model and how to report a
+vulnerability privately.
 
 ## Related
 
@@ -194,13 +243,6 @@ harness-distill harvest /path/to/project --include-parents      # sessions start
 - Rules and skills sync across tools: [rulesync](https://github.com/dyoshikawa/rulesync),
   [ruler](https://github.com/intellectronica/ruler)
 - Chat archiving: [SpecStory](https://specstory.com)
-- The `AGENTS.md` standard: [agents.md](https://agents.md)
-
-## Security
-
-Session history can contain secrets and untrusted text. See
-[SECURITY.md](SECURITY.md) for the threat model and how to report a
-vulnerability privately.
 
 ## License
 
