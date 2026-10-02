@@ -24,6 +24,31 @@ Antigravity. Claude Code and Gemini CLI need a one-line stub, which the skill
 adds when needed. The next agent starts with your project's context, and
 nothing has to be replayed.
 
+## Quick start
+
+```bash
+# 1. Install. This one directory is scanned by pi, Codex, Gemini CLI, Cursor, Copilot and Antigravity.
+git clone https://github.com/alexcpn/harness-distill ~/.agents/skills/harness-distill
+ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill   # Claude Code
+
+# 2. Distill. Open the project in any agent that can run commands, and ask:
+cd ~/work/my-app
+pi                                  # or claude, codex, agy, Cursor's agent…
+> /skill:harness-distill .          # pi (in Claude Code: /harness-distill .)
+```
+
+This writes `AGENTS.md` and `.agents/HANDOFF.md`. Review them, then commit
+`AGENTS.md`.
+
+```bash
+# 3. Continue in the new tool. Open the same folder and ask, cold:
+> what is this project, what was I last working on, and what's next?
+```
+
+When you finish a session, say *"I'm done for today"*. The agent then
+updates `HANDOFF.md`, so whichever tool you open next starts where you
+stopped.
+
 ## Distill, don't migrate
 
 Several good tools convert or resume a **single session** in another tool.
