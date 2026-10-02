@@ -27,9 +27,9 @@ nothing has to be replayed.
 ## Quick start
 
 ```bash
-# 1. Install. This one directory is scanned by pi, Codex, Gemini CLI, Cursor, Copilot and Antigravity.
-git clone https://github.com/alexcpn/harness-distill ~/.agents/skills/harness-distill
-ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill   # Claude Code
+# 1. Install the tool, then the skill (into ~/.agents/skills and ~/.claude/skills)
+uv tool install git+https://github.com/alexcpn/harness-distill
+harness-distill install
 
 # 2. Distill. Open the project in any agent that can run commands, and ask:
 cd ~/work/my-app
@@ -101,13 +101,41 @@ still work as targets through `AGENTS.md`.
 
 ## Install
 
-Clone it into the shared Agent Skills directory. pi, Codex, Gemini CLI,
-Cursor, Copilot and Antigravity all scan this directory:
+### With uv (recommended)
+
+```bash
+uv tool install git+https://github.com/alexcpn/harness-distill
+harness-distill install
+```
+
+`harness-distill install` copies the skill into `~/.agents/skills`, which pi,
+Codex, Gemini CLI, Cursor, Copilot and Antigravity scan, and into
+`~/.claude/skills` for Claude Code. Use `--target agents` or
+`--target claude` to install into only one of them.
+
+To upgrade, reinstall the tool and refresh the skill:
+
+```bash
+uv tool install --force git+https://github.com/alexcpn/harness-distill
+harness-distill install
+```
+
+To remove it:
+
+```bash
+harness-distill uninstall && uv tool uninstall harness-distill
+```
+
+`pipx install git+https://github.com/alexcpn/harness-distill` works too.
+
+### With git
+
+The repo root is the skill itself, so a clone works without installing
+anything:
 
 ```bash
 git clone https://github.com/alexcpn/harness-distill ~/.agents/skills/harness-distill
-# Claude Code reads its own directory:
-ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill
+ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill   # Claude Code
 ```
 
 Requirements: Python 3.8+, standard library only.
@@ -140,9 +168,10 @@ The skill then:
 You can also run the harvester on its own:
 
 ```bash
-python3 scripts/harvest.py /path/to/project --out digest.md
-python3 scripts/harvest.py /path/to/project --source cursor        # one harness
-python3 scripts/harvest.py /path/to/project --include-parents      # sessions started from a parent dir
+harness-distill harvest /path/to/project --out digest.md
+harness-distill harvest /path/to/project --source cursor        # one harness
+harness-distill harvest /path/to/project --include-parents      # sessions started from a parent dir
+# from a git clone: python3 scripts/harvest.py …
 ```
 
 ## Privacy
@@ -167,6 +196,12 @@ python3 scripts/harvest.py /path/to/project --include-parents      # sessions st
 - Chat archiving: [SpecStory](https://specstory.com)
 - The `AGENTS.md` standard: [agents.md](https://agents.md)
 
+## Security
+
+Session history can contain secrets and untrusted text. See
+[SECURITY.md](SECURITY.md) for the threat model and how to report a
+vulnerability privately.
+
 ## License
 
-MIT
+[MIT](LICENSE)

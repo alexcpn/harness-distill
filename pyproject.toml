@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "harness-distill"
+version = "0.1.0"
+description = "Distill your coding-agent sessions from every harness (Claude Code, Codex, pi, Cursor, Copilot, Antigravity) into AGENTS.md + HANDOFF.md."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Alex Punnen" }]
+requires-python = ">=3.8"
+keywords = ["agents-md", "agent-skills", "claude-code", "codex", "cursor", "copilot", "antigravity", "context-engineering"]
+classifiers = [
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Topic :: Software Development",
+]
+
+[project.urls]
+Homepage = "https://github.com/alexcpn/harness-distill"
+Issues = "https://github.com/alexcpn/harness-distill/issues"
+
+[project.scripts]
+harness-distill = "harness_distill.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness_distill"]
+
+# The skill lives at the repo root so `git clone` into a skills dir works as-is.
+# The wheel carries the same files; there is no second copy to keep in sync.
+[tool.hatch.build.targets.wheel.force-include]
+"SKILL.md" = "harness_distill/skill/SKILL.md"
+"references" = "harness_distill/skill/references"
+"scripts" = "harness_distill/skill/scripts"
