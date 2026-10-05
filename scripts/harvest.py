@@ -9,12 +9,13 @@ Reads (best effort, stdlib only):
   - Gemini CLI:  ~/.gemini/tmp/<project>/chats/session-*.jsonl (via ~/.gemini/projects.json)
   - Cursor:      ~/.config/Cursor/User (or macOS/Windows equivalent) state.vscdb composer chats
   - VS Code Copilot Chat: <Code User>/workspaceStorage/<hash>/chatSessions/*.json
+  - claude-mem:  ~/.claude-mem/claude-mem.db (its AI-compressed observations and session summaries)
   - Antigravity: ~/.gemini/antigravity{,-cli}/brain/<id>/{task,implementation_plan,walkthrough}.md
                  plus the agy CLI's prompt log ~/.gemini/antigravity-cli/history.jsonl
                  (conversation steps themselves are protobuf; these are what's readable)
 
 Usage:
-  harvest.py /path/to/project [--source claude|pi|codex|gemini|cursor|copilot|antigravity|all] [--include-parents]
+  harvest.py /path/to/project [--source claude|pi|codex|gemini|cursor|copilot|antigravity|claude-mem|all] [--include-parents]
              [--max-chars 400000] [--out digest.md]
 
 The digest keeps user prompts, assistant prose, compaction summaries and one-line
@@ -28,6 +29,7 @@ import os
 import hashlib
 import re
 import sqlite3
+import subprocess
 import sys
 from pathlib import Path
 
@@ -303,6 +305,64 @@ def read_copilot(path, files):
             yield ts, "assistant", "".join(prose)
 
 
+def claude_mem_db():
+    return Path(os.environ.get("CLAUDE_MEM_DATA_DIR", HOME / ".claude-mem")).expanduser() / "claude-mem.db"
+
+
+def columns(con, table):
+    return {row[1] for row in con.execute(f"pragma table_info({table})")}
+
+
+def git_identity(project):
+    """Names claude-mem may have stored for this folder: git-root basename and owner/repo slug."""
+    names = {project.name}
+    try:
+        root = subprocess.run(["git", "-C", str(project), "rev-parse", "--show-toplevel"],
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+        if root:
+            names.add(Path(root).name)
+        url = subprocess.run(["git", "-C", str(project), "remote", "get-url", "origin"],
+                             capture_output=True, text=True, timeout=5).stdout.strip()
+        m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
+        if m:
+            names.add(m.group(1))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return names
+
+
+def read_claude_mem(key, files):
+    db, memory_session = key.rsplit("#", 1)
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    scols = columns(con, "sdk_sessions")
+    row = con.execute("select user_prompt, started_at from sdk_sessions where memory_session_id=?",
+                      (memory_session,)).fetchone()
+    if row and row[0]:
+        yield row[1] or "", "user", clean_user_text(row[0])
+    ocols = columns(con, "observations")
+    wanted = [c for c in ("type", "title", "subtitle", "narrative", "facts", "text", "files_modified", "created_at")
+              if c in ocols]
+    for obs in con.execute(f"select {', '.join(wanted)} from observations where memory_session_id=? "
+                           "order by created_at_epoch", (memory_session,)):
+        o = dict(zip(wanted, obs))
+        head = " — ".join(x for x in (o.get("title"), o.get("subtitle")) if x)
+        body = o.get("narrative") or o.get("text") or ""
+        if o.get("facts"):
+            body += "\nFacts: " + o["facts"]
+        for f in re.findall(r'"([^"]+)"', o.get("files_modified") or ""):
+            files.add(f)
+        yield o.get("created_at", ""), "summary", f"[observation: {o.get('type', '?')}] {head}".rstrip() + f"\n{body}".rstrip()
+    if con.execute("select name from sqlite_master where name='session_summaries'").fetchone():
+        sum_cols = columns(con, "session_summaries")
+        fields = [c for c in ("request", "investigated", "learned", "completed", "next_steps", "notes")
+                  if c in sum_cols]
+        for srow in con.execute(f"select {', '.join(fields)}, created_at from session_summaries "
+                                "where memory_session_id=?", (memory_session,)):
+            parts = [f"{f.replace('_', ' ').capitalize()}: {v}" for f, v in zip(fields, srow) if v]
+            if parts:
+                yield srow[-1] or "", "summary", "[session summary]\n" + "\n".join(parts)
+
+
 ANTIGRAVITY_ARTIFACTS = ("task.md", "implementation_plan.md", "walkthrough.md")
 
 
@@ -418,6 +478,29 @@ def find_sessions(project, source, include_parents):
                 if folder in targets:
                     for f in glob.glob(str(Path(wj).parent / "chatSessions/*.json*")):
                         found.append(("copilot", f, targets[folder]))
+    if source in ("claude-mem", "all") and claude_mem_db().is_file():
+        db = claude_mem_db()
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            scols = columns(con, "sdk_sessions")
+            # Project and subfolders only, even with --include-parents: a parent such as
+            # /ssd would pull in every unrelated session started there.
+            rows = []
+            if "cwd" in scols:
+                # Newer databases record the cwd; match the project or anything below it.
+                rows = con.execute(
+                    "select memory_session_id, cwd from sdk_sessions where memory_session_id is not null "
+                    "and (cwd = ? or cwd like ?)", (str(project), str(project) + "/%")).fetchall()
+            if not rows:
+                # Older databases only store a project name (git-root basename or owner/repo).
+                names = sorted(git_identity(project))
+                rows = con.execute(
+                    f"select memory_session_id, ? from sdk_sessions where memory_session_id is not null "
+                    f"and project in ({','.join('?' * len(names))})", (str(project), *names)).fetchall()
+            for mid, cwd in rows:
+                found.append(("claude-mem", f"{db}#{mid}", Path(cwd) if cwd else project))
+        except sqlite3.Error:
+            pass
     if source in ("antigravity", "all"):
         # Artifacts are matched by the file links inside them. Only the project itself
         # counts: every artifact under a parent like /ssd would link "into" it.
@@ -438,13 +521,23 @@ def find_sessions(project, source, include_parents):
 
 
 def session_mtime(key):
+    if "claude-mem.db#" in key:
+        db, mid = key.rsplit("#", 1)
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            row = con.execute("select started_at_epoch from sdk_sessions where memory_session_id=?", (mid,)).fetchone()
+            if row and row[0]:
+                return row[0] / 1000 if row[0] > 1e11 else row[0]
+        except sqlite3.Error:
+            pass
+        return os.path.getmtime(db)
     path = key.rsplit("#", 1)[0] if ("state.vscdb#" in key or "history.jsonl#" in key) else key
     return os.path.getmtime(path)
 
 
 def mentions_project(path, project):
     needle = project.name
-    if "state.vscdb#" in path or "history.jsonl#" in path or os.path.isdir(path):
+    if "state.vscdb#" in path or "history.jsonl#" in path or "claude-mem.db#" in path or os.path.isdir(path):
         return True
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
@@ -458,7 +551,7 @@ def mentions_project(path, project):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("project")
-    ap.add_argument("--source", default="all", choices=["claude", "pi", "codex", "gemini", "cursor", "copilot", "antigravity", "all"])
+    ap.add_argument("--source", default="all", choices=["claude", "pi", "codex", "gemini", "cursor", "copilot", "antigravity", "claude-mem", "all"])
     ap.add_argument("--include-parents", action="store_true",
                     help="also scan sessions started in ancestor dirs that mention the project")
     ap.add_argument("--max-chars", type=int, default=400_000,
@@ -514,7 +607,8 @@ def main():
     sessions = find_sessions(project, a.source, a.include_parents)
     sessions = [s for s in sessions if s[2] == project or mentions_project(s[1], project)]
     readers = {"claude": read_claude, "pi": read_pi, "codex": read_codex, "gemini": read_gemini,
-               "cursor": read_cursor, "copilot": read_copilot, "antigravity": read_antigravity}
+               "cursor": read_cursor, "copilot": read_copilot, "antigravity": read_antigravity,
+               "claude-mem": read_claude_mem}
     files_touched = set()
     skills_used = set()
     blocks = []
@@ -533,7 +627,7 @@ def main():
             if harness == "antigravity":
                 limit = 6000
             prefix = {"user": "**USER**", "assistant": "**AGENT**",
-                      "summary": "**ARTIFACT**" if harness == "antigravity" else "**SUMMARY**",
+                      "summary": {"antigravity": "**ARTIFACT**", "claude-mem": "**MEMORY**"}.get(harness, "**SUMMARY**"),
                       "tool": "  ↳", "tool-error": "  ✗ tool error:"}[role]
             body = clip(text, limit) if role not in ("tool",) else text
             lines.append(f"{prefix} {body}")

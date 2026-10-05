@@ -24,6 +24,7 @@ See `references/harness-locations.md` for paths. In short:
 | Gemini CLI | `~/.gemini/tmp/<name>/chats/*.jsonl` | `GEMINI.md` by default; `AGENTS.md` only if configured | `~/.agents/skills`, `~/.gemini/skills`, `.agents/skills` |
 | Cursor | SQLite `state.vscdb` (workspace + global storage) | `AGENTS.md`, `.cursor/rules/*.mdc`, User Rules (no global file) | `~/.agents/skills`, `~/.cursor/skills`, `.agents/skills` |
 | VS Code Copilot Chat | `<Code User>/workspaceStorage/<hash>/chatSessions/*.json` | `AGENTS.md`, `.github/copilot-instructions.md`, `.github/instructions/` | per VS Code settings |
+| claude-mem (plugin) | SQLite `~/.claude-mem/claude-mem.db`: observations and session summaries | (its own memory injection) | n/a |
 | Antigravity (IDE + `agy`) | protobuf; readable: `~/.gemini/antigravity*/brain/<id>/*.md`, `agy` prompt log | `AGENTS.md` (v1.20.3+), `GEMINI.md` wins on conflict, `.agents/rules/` | `~/.agents/skills`, `.agents/skills` |
 
 `AGENTS.md` at the project root is the portable target, and
@@ -59,6 +60,12 @@ differ from a terminal harness:
 The harvester cannot read Zed, Windsurf, JetBrains or Kiro history. They
 still pick up `AGENTS.md` as a target.
 
+**claude-mem.** If the user runs claude-mem, its database holds model-written
+observations and session summaries from every harness it hooks into. Treat
+them like transcripts: useful, but claims still need checking against git,
+and they may lag behind the code. The harvester reads them read-only and
+never changes claude-mem's data.
+
 **How much each source gives you:** Claude Code, pi, Codex, Gemini CLI,
 Cursor and Copilot Chat keep full transcripts. Antigravity only exposes its plan, task and
 walkthrough artifacts, plus your `agy` prompts. Expect a thinner digest
@@ -71,7 +78,7 @@ from Antigravity, and lean harder on git history to fill the gaps.
    ```bash
    python3 <skill-dir>/scripts/harvest.py <project> --out /tmp/handoff-digest.md
    # add --include-parents if work was started from a parent dir (e.g. a monorepo root)
-   # add --source claude|pi|codex|gemini|cursor|copilot|antigravity to restrict; default is all
+   # add --source claude|pi|codex|gemini|cursor|copilot|antigravity|claude-mem to restrict; default is all
    ```
 
    The digest lists existing instruction files, Claude memory, project

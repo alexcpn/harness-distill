@@ -51,6 +51,9 @@ tools, update it in place:
   `describe_tool` extracts the `cmd` strings. Gemini CLI re-emits the same message `id`
   while streaming, so keep the last copy. In Cursor, bubble `type` 1 is the user and 2 is
   the assistant.
+- claude-mem matching never uses parent dirs (same over-match risk as Antigravity). Its
+  name fallback (git-root basename or `owner/repo`) can collide between repos with the same
+  basename, so prefer `cwd`.
 - Antigravity conversations are protobuf. Only `brain/*/{task,implementation_plan,
   walkthrough}.md` and the `agy` `history.jsonl` are readable.
 - Build tools ignore `.git/info/exclude`: hatch put the local `.agents/HANDOFF.md` into the
@@ -70,6 +73,10 @@ tools, update it in place:
   - Cursor: `/ssd/kite-mcp-client`
   - Copilot: `/ssd/elevation_transformer`
   - Antigravity: `/ssd/agentic_ai_codereivew/k8s_agentic_ai/agentic_codereview`
+- claude-mem isn't installed on the owner's machine. Test it against a database built from
+  its schema (`sdk_sessions`, `observations`, `session_summaries`; see
+  `references/harness-locations.md`), pointed to with `CLAUDE_MEM_DATA_DIR=<dir>`. Cover both
+  the newer schema with `cwd` and the older one with project names only.
 - Test the CLI and packaging in a sandbox so the real `~` is untouched:
   `UV_TOOL_DIR=… UV_TOOL_BIN_DIR=… uv tool install .`, then `HOME=<scratch> harness-distill install`.
 

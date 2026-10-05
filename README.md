@@ -18,7 +18,8 @@ files. Any assistant reads them when it opens the project:
 | `.agents/HANDOFF.md` | Where you left off: recent work, open branches and PRs, next steps | No, it stays on your machine |
 
 Works with **Claude Code, Codex, pi, Cursor, VS Code Copilot, Antigravity and
-Gemini CLI**, in any direction.
+Gemini CLI**, in any direction. If you use [claude-mem](https://github.com/thedotmack/claude-mem),
+it reads that memory too.
 
 ## Before you start
 
@@ -158,6 +159,23 @@ one works at the **project** level:
 - **It reads GUI IDE history too**: Cursor IDE, VS Code Copilot Chat, and
   Antigravity's artifacts.
 
+### How it compares to claude-mem
+
+[claude-mem](https://github.com/thedotmack/claude-mem) is the popular way to give agents
+memory across sessions. It works differently:
+
+| | claude-mem | harness-distill |
+|---|---|---|
+| When it captures | From the moment you install its hooks | After the fact: it reads history you already have, even from tools you never set up |
+| What runs | A background service, SQLite and a vector DB, with model calls on every session | Nothing in the background: one script and one agent run |
+| Where memory lives | Its database (`~/.claude-mem`) or its cloud | Plain files in your repo: `AGENTS.md` is committed, `HANDOFF.md` stays local |
+| Who can use it | Tools with a claude-mem integration | Any tool that reads `AGENTS.md`, and any teammate who opens the file |
+| Review | Through its viewer and search | A diff in a pull request, checked against git |
+
+They work together. If you run claude-mem, harness-distill reads its database as one more
+source, and turns those observations into an `AGENTS.md` that tools and teammates without
+claude-mem can read.
+
 To resume one exact conversation in another tool, use
 [session-migrate](https://github.com/xhluca/session-migrate) or
 [continues](https://github.com/yigitkonur/cli-continues). The two approaches
@@ -174,6 +192,7 @@ work well together.
 | Cursor IDE | `state.vscdb` (SQLite, opened read-only) | Full chats, tool calls, chat titles |
 | VS Code Copilot Chat | `workspaceStorage/<hash>/chatSessions/*.json` | Prompts, replies, tool calls, edited files |
 | Antigravity (IDE and `agy`) | `brain/<id>/{task,implementation_plan,walkthrough}.md`, `agy` prompt log | Artifacts and prompts only (conversations are protobuf) |
+| [claude-mem](https://github.com/thedotmack/claude-mem) (if installed) | `~/.claude-mem/claude-mem.db` (opened read-only) | Its compressed observations and session summaries, from every harness it hooks |
 
 It also reads existing instruction files (`AGENTS.md`, `CLAUDE.md`,
 `GEMINI.md`, `.cursorrules`, Copilot instructions). It lists the project
@@ -242,6 +261,8 @@ vulnerability privately.
   [casr](https://github.com/Dicklesworthstone/cross_agent_session_resumer)
 - Rules and skills sync across tools: [rulesync](https://github.com/dyoshikawa/rulesync),
   [ruler](https://github.com/intellectronica/ruler)
+- Persistent agent memory: [claude-mem](https://github.com/thedotmack/claude-mem). It captures
+  sessions from now on; harness-distill can read its database.
 - Chat archiving: [SpecStory](https://specstory.com)
 
 ## License

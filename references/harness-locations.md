@@ -97,3 +97,17 @@ Paths verified on this machine (Oct 2026) against Claude Code, pi 1.0.0, Codex C
 - Zed: `~/.local/share/zed/threads/threads.db` (SQLite, with JSON or zstd blobs; untested). It reads the first
   of `.rules`, `.cursorrules`, …, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` in the project.
 - Windsurf, JetBrains AI/Junie, Kiro: history formats were not checked. They can still be targets via `AGENTS.md`.
+
+## claude-mem (memory plugin for many harnesses)
+- Database: `~/.claude-mem/claude-mem.db`. Set `CLAUDE_MEM_DATA_DIR` to override; Chroma vectors live in `chroma/`.
+- `sdk_sessions`: `memory_session_id`, `project`, `platform_source` (claude, codex, …), `user_prompt`,
+  `started_at_epoch`, and `cwd` in newer schemas.
+- `observations`: `type`, `text`, and in newer schemas `title`, `subtitle`, `narrative`, `facts`
+  and `files_modified` (JSON arrays as text).
+- `session_summaries`: `request`, `investigated`, `learned`, `completed`, `next_steps`, `notes`.
+- `project` is the git-root (or marker-file) basename by default, or `owner/repo` when its
+  git-remote naming is on. Match by `cwd` when the column exists; otherwise match those names,
+  which can collide between repos that share a basename. Open the database read-only, because
+  claude-mem's worker writes to it in WAL mode.
+- These rows are claude-mem's own model-written summaries of the sessions, already distilled
+  once, so they make a dense, high-signal source.
