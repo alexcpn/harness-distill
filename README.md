@@ -40,7 +40,7 @@ You need:
 **Step 1. Install.** Run these in your terminal:
 
 ```bash
-uv tool install git+https://github.com/alexcpn/harness-distill
+uv tool install harness-distill
 harness-distill install
 ```
 
@@ -180,7 +180,7 @@ It also reads existing instruction files (`AGENTS.md`, `CLAUDE.md`,
 config you need to recreate in the target tool: MCP servers, rules and
 skills. History from Zed, Windsurf, JetBrains and Kiro isn't read yet, but
 those tools still pick up `AGENTS.md`. Exact paths and formats are in
-[`references/harness-locations.md`](references/harness-locations.md).
+[`references/harness-locations.md`](https://github.com/alexcpn/harness-distill/blob/main/references/harness-locations.md).
 
 ### Commands
 
@@ -195,9 +195,9 @@ harness-distill harvest /path/to/project --include-parents    # include sessions
 Slash commands: `/skill:harness-distill <path>` in pi, `/harness-distill <path>`
 in Claude Code.
 
-Upgrade: `uv tool install --force git+https://github.com/alexcpn/harness-distill && harness-distill install`.
+Upgrade: `uv tool install --force --refresh harness-distill && harness-distill install`.
 Remove: `harness-distill uninstall && uv tool uninstall harness-distill`.
-`pipx install git+https://github.com/alexcpn/harness-distill` works too.
+`pipx install harness-distill` works too. To try the unreleased `main` branch: `uv tool install --force git+https://github.com/alexcpn/harness-distill`.
 
 ### Install with git instead
 
@@ -232,7 +232,7 @@ ln -s ~/.agents/skills/harness-distill ~/.claude/skills/harness-distill   # Clau
 - Don't commit raw chat logs. Put the reasoning that matters in commit
   messages and PR descriptions.
 
-See [SECURITY.md](SECURITY.md) for the threat model and how to report a
+See [SECURITY.md](https://github.com/alexcpn/harness-distill/blob/main/SECURITY.md) for the threat model and how to report a
 vulnerability privately.
 
 ## Related
@@ -246,4 +246,4 @@ vulnerability privately.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/alexcpn/harness-distill/blob/main/LICENSE)
