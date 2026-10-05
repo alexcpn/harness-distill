@@ -17,6 +17,9 @@ tools, update it in place:
   ~15 entries.
 - Promote anything durable (a convention, a gotcha, a command) into this
   file instead.
+If `harness-distill` is installed and no session-start note about it
+appeared, run `harness-distill check .` at the start and follow what it
+prints. It prints nothing when the handoff is current.
 
 ## What it is (and isn't)
 - **Distill, don't migrate.** It works per project, across all harnesses, and produces a
@@ -24,9 +27,18 @@ tools, update it in place:
   resume a single session. Those jobs belong to session-migrate and continues; point
   users there instead of growing into that space.
 - The **harvester is deterministic and the model does the distilling.** `scripts/harvest.py`
-  builds a digest. The agent following `SKILL.md` writes the files. Hooks that auto-distill
-  were considered and rejected: a hook can't run the model cheaply, and it would loop and
-  write files nobody reviewed.
+  builds a digest. The agent following `SKILL.md` writes the files.
+- **Automatic mode = hook detects, agent distills.** Session-start hooks (Claude Code
+  `~/.claude/settings.json`, Codex `~/.codex/hooks.json`, pi `~/.pi/agent/extensions/harness-distill.ts`)
+  run `harness-distill check`. It's a no-model scan, about 0.05 s. When context is missing or
+  `HANDOFF.md` is older than other harnesses' sessions (15 min slack), it emits a
+  `[harness-distill]` note, and the agent then runs the skill (`--since` for refreshes).
+  - Never run the model from a hook.
+  - HANDOFF.md refreshes are silent. AGENTS.md changes are only proposed.
+  - `HARNESS_DISTILL_HOOK=off` disables the check, and must prefix nested CLI runs to prevent loops.
+  - `check` must never fail loudly: it catches everything and prints nothing on error.
+  - install/uninstall only touch hook entries containing `harness_distill.cli check`. Other
+    hooks and settings must survive. Merges are covered by sandbox tests.
 
 ## Layout and rules
 - The repo root **is** the skill (`SKILL.md`, `references/`, `scripts/`), so a `git clone`
@@ -60,6 +72,12 @@ tools, update it in place:
   sdist. Keep `[tool.hatch.build.targets.sdist] exclude = [".agents", ...]`, and run
   `tar tzf dist/*.tar.gz` before every upload.
 - `pi -p --no-tools` shows no skills at all (skills need `read`), so test with `--tools read`.
+- Codex runs only hooks the user has trusted. After install they must run `/hooks` in Codex
+  once. For tests, use a temp `CODEX_HOME` with `codex exec --dangerously-bypass-hook-trust`.
+  A `-c hooks...` override does not work.
+- The Claude hook can be tested without touching settings: `claude -p "…" --settings <file>
+  --no-session-persistence < /dev/null`. For pi: `pi -e <extension.ts> --no-session -p "…"`.
+  pi's default model may be slow (Kimi via OpenRouter), so allow 2 min+.
 - Gemini CLI no longer works with personal Google accounts, so you can't test it as a target here.
 - Dev setup on the owner's machine: `~/.agents/skills/harness-distill` and
   `~/.claude/skills/harness-distill` are symlinks to this checkout. `harness-distill install`

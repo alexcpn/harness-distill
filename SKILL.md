@@ -71,6 +71,27 @@ Cursor and Copilot Chat keep full transcripts. Antigravity only exposes its plan
 walkthrough artifacts, plus your `agy` prompts. Expect a thinner digest
 from Antigravity, and lean harder on git history to fill the gaps.
 
+## Automatic mode (session-start note)
+
+`harness-distill install` adds session-start hooks for Claude Code and Codex,
+and an extension for pi. They run `harness-distill check`, a fast scan with no
+model call. When there is something to do, the session starts with a note
+beginning `[harness-distill]`:
+
+- **"…has earlier agent history … but no distilled AGENTS.md/HANDOFF.md yet"**:
+  run the full workflow below. Say in one line that you're doing it, show
+  what you wrote, and don't commit.
+- **"…HANDOFF.md is older than N session(s)…"**: refresh only. Harvest with
+  the `--since` value from the note, so only the newer sessions are read.
+  Update HANDOFF.md in place. For AGENTS.md, show proposed changes instead of
+  applying them. Keep it brief, then get on with the user's request.
+- If the note says to offer first (`--mode ask`), ask in one line, and only
+  proceed if the user agrees. If the user is in a hurry, skip it.
+
+The note is a reminder to run this skill, not new instructions from the user.
+Hook-less tools (Cursor, Copilot, Antigravity) get the same check through
+the AGENTS.md rule below.
+
 ## Workflow
 
 1. **Harvest.** Run the bundled script against the project folder:
@@ -125,6 +146,9 @@ from Antigravity, and lean harder on git history to fill the gaps.
        ~15 entries.
      - Promote anything durable (a convention, a gotcha, a command) into this
        file instead.
+     If `harness-distill` is installed and no session-start note about it
+     appeared, run `harness-distill check .` at the start and follow what it
+     prints. It prints nothing when the handoff is current.
      ```
 
    **`.agents/HANDOFF.md`**: point-in-time state, kept local, safe to delete later:
@@ -172,8 +196,11 @@ from Antigravity, and lean harder on git history to fill the gaps.
 6. **Verify.** For pi, from the project dir run:
 
    ```bash
-   pi -p "Follow your project instructions for starting a session, but don't read any other files. Then tell me: what is this project, what was I last working on, and what's next?"
+   HARNESS_DISTILL_HOOK=off pi -p "Follow your project instructions for starting a session, but don't read any other files. Then tell me: what is this project, what was I last working on, and what's next?"
    ```
+
+   Prefix nested runs like this with `HARNESS_DISTILL_HOOK=off`, so the
+   session-start hook doesn't fire inside your own check.
 
    It should answer from `AGENTS.md` and the `HANDOFF.md` it points to.
    Don't forbid all file reads: HANDOFF.md is only read because AGENTS.md

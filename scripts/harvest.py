@@ -546,6 +546,79 @@ def mentions_project(path, project):
         return False
 
 
+def parse_since(value):
+    try:
+        return float(value)
+    except ValueError:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+
+
+# ---------- staleness check (used by session-start hooks; no model calls) ----------
+
+LABELS = {"claude": "Claude Code", "pi": "pi", "codex": "Codex", "gemini": "Gemini CLI", "cursor": "Cursor",
+          "copilot": "Copilot Chat", "antigravity": "Antigravity", "claude-mem": "claude-mem"}
+
+
+def project_root(path):
+    path = Path(path).expanduser().resolve()
+    try:
+        root = subprocess.run(["git", "-C", str(path), "rev-parse", "--show-toplevel"],
+                              capture_output=True, text=True, timeout=5).stdout.strip()
+        return Path(root) if root else path
+    except (OSError, subprocess.SubprocessError):
+        return path
+
+
+def check(path, exclude=(), mode="auto", slack_minutes=15, recent_seconds=90):
+    """Return a short instruction for the agent if the project's distilled context is missing
+    or behind, else None. `exclude` holds the current session's transcript path(s)."""
+    project = project_root(path)
+    if project in (HOME, Path("/")):
+        return None
+    agents, handoff = project / "AGENTS.md", project / ".agents" / "HANDOFF.md"
+    has_rule = agents.is_file() and "## Session handoff" in agents.read_text(errors="replace")
+    now = datetime.datetime.now().timestamp()
+    excluded = {str(Path(e).expanduser()) for e in exclude if e}
+    sessions = []
+    for harness, key, cwd in find_sessions(project, "all", False):
+        if key in excluded or key.split("#")[0] in excluded:
+            continue
+        mtime = session_mtime(key)
+        if mtime > now - recent_seconds:  # the session that is starting right now
+            continue
+        sessions.append((harness, mtime))
+    if not sessions:
+        return None
+
+    def summary(items):
+        counts = {}
+        for h, _ in items:
+            counts[LABELS.get(h, h)] = counts.get(LABELS.get(h, h), 0) + 1
+        latest = datetime.datetime.fromtimestamp(max(m for _, m in items)).strftime("%Y-%m-%d")
+        return f"{len(items)} session(s): " + ", ".join(f"{n} {k}" for k, n in counts.items()) + f"; latest {latest}"
+
+    ask = mode == "ask"
+    if not has_rule or not handoff.is_file():
+        act = ("Offer once, in one line, to run the harness-distill skill on it; run it only if the user agrees."
+               if ask else
+               "Before the user's first request, say in one line that you are distilling earlier sessions, "
+               "then follow the harness-distill skill for this project. Show what you wrote; don't commit. "
+               "If the user declines or is in a hurry, skip it.")
+        return (f"[harness-distill] This project ({project}) has earlier agent history ({summary(sessions)}) "
+                f"but no distilled AGENTS.md/HANDOFF.md yet. {act}")
+    since = handoff.stat().st_mtime
+    newer = [x for x in sessions if x[1] > since + slack_minutes * 60]
+    if not newer:
+        return None
+    since_iso = datetime.datetime.fromtimestamp(since).isoformat(timespec="seconds")
+    how = (f"Harvest only the newer sessions: `harvest.py {project} --since {since_iso}` "
+           f"(or `harness-distill harvest {project} --since {since_iso}`). Update .agents/HANDOFF.md in place; "
+           f"for AGENTS.md, only show proposed changes.")
+    act = (f"Offer once, in one line, to refresh it. {how}" if ask else
+           f"Refresh it before the user's first request, briefly and without asking, then mention it in one line. {how}")
+    return f"[harness-distill] .agents/HANDOFF.md is older than {summary(newer)}. {act}"
+
+
 # ---------- main ----------
 
 def main():
@@ -557,6 +630,8 @@ def main():
     ap.add_argument("--max-chars", type=int, default=400_000,
                     help="cap on digest size; oldest turns are trimmed first")
     ap.add_argument("--out", help="write digest here instead of stdout")
+    ap.add_argument("--since", help="only sessions modified after this ISO time or epoch seconds "
+                                    "(used to refresh a handoff from newer sessions only)")
     a = ap.parse_args()
 
     project = Path(a.project).expanduser().resolve()
@@ -606,6 +681,9 @@ def main():
     # 4. Sessions
     sessions = find_sessions(project, a.source, a.include_parents)
     sessions = [s for s in sessions if s[2] == project or mentions_project(s[1], project)]
+    if a.since:
+        since = parse_since(a.since)
+        sessions = [s for s in sessions if session_mtime(s[1]) > since]
     readers = {"claude": read_claude, "pi": read_pi, "codex": read_codex, "gemini": read_gemini,
                "cursor": read_cursor, "copilot": read_copilot, "antigravity": read_antigravity,
                "claude-mem": read_claude_mem}
