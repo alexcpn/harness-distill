@@ -141,6 +141,11 @@ from Antigravity, and lean harder on git history to fill the gaps.
    grep -qxF '.agents/HANDOFF.md' .git/info/exclude 2>/dev/null || echo '.agents/HANDOFF.md' >> .git/info/exclude
    ```
 
+   `.git/info/exclude` keeps it out of git, but not out of packages. Some
+   build tools, such as hatch sdists and npm without a `files` list, package
+   untracked files. If the project publishes packages, exclude `.agents/`
+   there too, and check the built archive.
+
    Commit it only if the user wants a shared handoff, for example for a
    team or a second machine. In that case, review the content, then
    remove the line from `.git/info/exclude`.

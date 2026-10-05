@@ -53,6 +53,9 @@ tools, update it in place:
   the assistant.
 - Antigravity conversations are protobuf. Only `brain/*/{task,implementation_plan,
   walkthrough}.md` and the `agy` `history.jsonl` are readable.
+- Build tools ignore `.git/info/exclude`: hatch put the local `.agents/HANDOFF.md` into the
+  sdist. Keep `[tool.hatch.build.targets.sdist] exclude = [".agents", ...]`, and run
+  `tar tzf dist/*.tar.gz` before every upload.
 - `pi -p --no-tools` shows no skills at all (skills need `read`), so test with `--tools read`.
 - Gemini CLI no longer works with personal Google accounts, so you can't test it as a target here.
 - Dev setup on the owner's machine: `~/.agents/skills/harness-distill` and

@@ -35,3 +35,7 @@ packages = ["src/harness_distill"]
 "SKILL.md" = "harness_distill/skill/SKILL.md"
 "references" = "harness_distill/skill/references"
 "scripts" = "harness_distill/skill/scripts"
+
+# .git/info/exclude is not honoured by hatch, so the local-only handoff must be excluded here.
+[tool.hatch.build.targets.sdist]
+exclude = [".agents", "dist"]
