@@ -46,7 +46,8 @@ def install(args):
             shutil.rmtree(dest)
         root.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dest, ignore=shutil.ignore_patterns(
-            "__pycache__", "*.pyc", ".git", "src", "pyproject.toml", "uv.lock", ".github"))
+            "__pycache__", "*.pyc", ".git", "src", "pyproject.toml", "uv.lock", ".github",
+            "dist", "AGENTS.md", "CLAUDE.md", ".agents"))
         print(f"ok    {label:<7} {dest}")
     print("Ask your agent to run the harness-distill skill on a project folder, "
           "e.g. `/skill:harness-distill .` in pi or `/harness-distill .` in Claude Code.")

@@ -33,9 +33,10 @@ scans. Some targets need one extra step:
 - **pi, Codex, Cursor, VS Code Copilot, Zed, Antigravity:** nothing extra. They load `AGENTS.md`
   natively. Antigravity needs v1.20.3 or later; on older builds use the
   Gemini CLI stub below.
-- **Claude Code:** add a `CLAUDE.md` whose only line is `@AGENTS.md`. Do
-  this only when Claude Code is a target: pi loads the first context file it
-  finds in a directory, so a stub `CLAUDE.md` can shadow the real one.
+- **Claude Code:** add a `CLAUDE.md` whose only line is `@AGENTS.md`, unless
+  a `CLAUDE.md` already exists. In that case, add the line to it. The stub is
+  safe for the other harnesses: pi checks `AGENTS.md` before `CLAUDE.md`, and
+  the rest either ignore `CLAUDE.md` or follow the import.
 - **Gemini CLI:** it reads only `GEMINI.md` unless configured. Prefer adding
   `{"context": {"fileName": ["AGENTS.md", "GEMINI.md"]}}` to the project's
   `.gemini/settings.json`. If that file exists, merge the key in rather than
@@ -159,10 +160,12 @@ from Antigravity, and lean harder on git history to fill the gaps.
 6. **Verify.** For pi, from the project dir run:
 
    ```bash
-   pi -p "Without reading any files: what is this project, what was I last working on, and what's next?"
+   pi -p "Follow your project instructions for starting a session, but don't read any other files. Then tell me: what is this project, what was I last working on, and what's next?"
    ```
 
-   It should answer from `AGENTS.md`. If it can't, the brief is missing
+   It should answer from `AGENTS.md` and the `HANDOFF.md` it points to.
+   Don't forbid all file reads: HANDOFF.md is only read because AGENTS.md
+   says to. If it can't, the brief is missing
    something, so fix it and repeat. The same check in other harnesses:
    `codex exec "..."`, `claude -p "..."`, `gemini -p "..."`, `agy -p "..."`
    (Antigravity), or `cursor-agent -p "..."` if the Cursor CLI is installed.
@@ -175,7 +178,7 @@ from Antigravity, and lean harder on git history to fill the gaps.
 
 ## Notes
 
-- Works in any direction (pi → Claude, Codex → pi, …); the harvester reads all three formats.
+- Works in any direction (pi → Claude, Cursor → Codex, …); the harvester reads every supported harness.
 - Re-running later is fine. Update HANDOFF.md in place and fold anything durable into AGENTS.md.
   The end-of-session rule in AGENTS.md keeps it current between runs, so re-harvesting is
   only needed when the work happened in a harness that didn't follow the rule.

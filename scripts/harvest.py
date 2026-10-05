@@ -419,14 +419,14 @@ def find_sessions(project, source, include_parents):
                     for f in glob.glob(str(Path(wj).parent / "chatSessions/*.json*")):
                         found.append(("copilot", f, targets[folder]))
     if source in ("antigravity", "all"):
-        uris = [Path(d).as_uri() for d in candidate_dirs(project, include_parents)]
+        # Artifacts are matched by the file links inside them. Only the project itself
+        # counts: every artifact under a parent like /ssd would link "into" it.
+        uri = project.as_uri() + "/"
         for bd in glob.glob(str(HOME / ".gemini/antigravity*/brain/*")):
             text = "".join((Path(bd) / n).read_text(errors="replace")
                            for n in ANTIGRAVITY_ARTIFACTS if (Path(bd) / n).is_file())
-            for u, d in zip(uris, candidate_dirs(project, include_parents)):
-                if u + "/" in text:
-                    found.append(("antigravity", bd, d))
-                    break
+            if uri in text:
+                found.append(("antigravity", bd, project))
         hist = HOME / ".gemini/antigravity-cli/history.jsonl"
         if hist.is_file():
             text = hist.read_text(errors="replace")
